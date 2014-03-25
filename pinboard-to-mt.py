@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import ConfigParser
 import datetime
+import MySQLdb
 import pinboard
 import sys
 import urllib2
@@ -10,8 +11,9 @@ class PinboardToMT:
 
     def __init__(self, date=None):
         if date is None:
-            date = datetime.datetime.utcnow().strftime('%Y-%m-%d')
-        self.date = date
+            self.date = datetime.datetime.utcnow().date()
+        else:
+            self.date = datetime.datetime.strptime(date, "%Y-%m-%d").date()
         self.load_config()
 
     def load_config(self):
@@ -28,6 +30,10 @@ class PinboardToMT:
                     'mt_author_id',
                     'mt_post_time',
                     'include_tags',
+                    'db_host',
+                    'db_name',
+                    'db_user',
+                    'db_password',
                     'verbose']
 
         for setting in settings:
@@ -41,19 +47,54 @@ class PinboardToMT:
         links = self.get_pinboard_links()
         if len(links) == 0:
             return
-
-        html = self.make_html(links)
-        print links 
-        print html
+        self.make_blog_post(links)
 
     def get_pinboard_links(self):
         try:
             p = pinboard.open(token=self.pinboard_api_token)
         except urllib2.HTTPError, error:
             raise PinboardToMTError("Can't connect to Pinboard: %s" % error)
-        links = p.posts(date=self.date)
+        links = p.posts(date=self.date.strftime('%Y-%m-%d'))
         self.message("Fetched %s link(s) from Pinboard." % len(links))
         return links
+
+    def make_blog_post(self, links):
+        html = self.make_html(links)
+        title = "Links for %s %s %s" % (self.date.strftime('%A'),
+                                        self.date.strftime('%d').lstrip('0'),
+                                        self.date.strftime('%B %Y'))
+        try:
+            db = MySQLdb.connect(host=self.db_host, user=self.db_user,
+                                passwd=self.db_password, db=self.db_name)
+        except MySQLdb.OperationalError, error:
+            raise PinboardToMTError("Problem connecting to database: %s" % error)
+
+        db.set_character_set('utf8')
+
+        cur = db.cursor()
+        cur.execute('SET NAMES utf8;')
+        cur.execute('SET CHARACTER SET utf8;')
+        cur.execute('SET character_set_connection=utf8;')
+
+        try:
+            cur.execute("""INSERT INTO mt_entry (entry_blog_id, entry_author_id,
+                entry_title, entry_text, entry_created_on, entry_authored_on,
+                entry_created_by, entry_status, entry_current_revision)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)""", (
+                    self.mt_blog_id,
+                    self.mt_author_id,
+                    title,
+                    html,
+                    datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
+                    self.date.strftime('%Y-%m-%d 23:58:00'),
+                    self.mt_author_id,
+                    4, # Scheduled
+                    0
+            ))
+        except UnicodeEncodeError, error:
+            raise PinboardToMTError("Unicode encoding error: %s" % error)
+
+        self.message("Added Movable Type entry (ID %s)." % db.insert_id())
 
     def make_html(self, links):
         """The HTML that will be the blog entry."""

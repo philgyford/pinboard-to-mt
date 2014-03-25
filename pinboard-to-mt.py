@@ -33,6 +33,10 @@ class PinboardToMT:
         for setting in settings:
             setattr(self, setting, config.get('Settings', setting))
 
+        # Assuming the Pinboard API token is always of the form
+        # 'username:SOMECHARACTERS'
+        self.pinboard_username = self.pinboard_api_token[:self.pinboard_api_token.index(':')]
+
     def start(self):
         links = self.get_pinboard_links()
         if len(links) == 0:
@@ -47,12 +51,12 @@ class PinboardToMT:
             p = pinboard.open(token=self.pinboard_api_token)
         except urllib2.HTTPError, error:
             raise PinboardToMTError("Can't connect to Pinboard: %s" % error)
-        print p
         links = p.posts(date=self.date)
         self.message("Fetched %s link(s) from Pinboard." % len(links))
         return links
 
     def make_html(self, links):
+        """The HTML that will be the blog entry."""
         html = ''
         for link in links:
             html += "<dt><a href=\"%s\">%s</a></dt>\n<dd>" % (
@@ -65,8 +69,8 @@ class PinboardToMT:
                 tags = []
                 for tag in link.get('tags', []):
                     tags.append(
-                        '<a href="http://pinboard.in/u:%s/t:%s">%s</a>' % (
-                                                            'TODO', tag, tag))
+                        '<a href="https://pinboard.in/u:%s/t:%s">%s</a>' % (
+                                            self.pinboard_username, tag, tag))
                 html += ' <span class="tags">%s</span>' % ', '.join(tags)
 
             html += "</dd>\n"

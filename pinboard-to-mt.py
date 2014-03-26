@@ -25,19 +25,23 @@ class PinboardToMT:
         except IOError:
             raise PinboardToMTError("Can't read config file: " + config_file)
 
-        settings = ['pinboard_api_token',
-                    'mt_blog_id',
-                    'mt_author_id',
-                    'mt_post_time',
-                    'include_tags',
-                    'db_host',
-                    'db_name',
-                    'db_user',
-                    'db_password',
-                    'verbose']
+        settings = {'pinboard_api_token':   'string',
+                    'mt_blog_id':           'integer',
+                    'mt_author_id':         'integer',
+                    'mt_post_time':         'string',
+                    'include_tags':         'integer',
+                    'db_host':              'string',
+                    'db_name':              'string',
+                    'db_user':              'string',
+                    'db_password':          'string',
+                    'verbose':              'integer',
+                    }
 
-        for setting in settings:
-            setattr(self, setting, config.get('Settings', setting))
+        for setting, tp in settings.iteritems():
+            if tp == 'integer': 
+                setattr(self, setting, config.getint('Settings', setting))
+            else:
+                setattr(self, setting, config.get('Settings', setting))
 
         # Assuming the Pinboard API token is always of the form
         # 'username:SOMECHARACTERS'
